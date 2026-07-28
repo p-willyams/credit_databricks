@@ -5,7 +5,7 @@ WITH tb_historico AS (
 ),
 
 fs_documentos_unicos AS (
-    SELECT DISTINCT
+    SELECT
         ID_CLIENTE,
         ID_DOCUMENTO
     FROM tb_historico
@@ -134,7 +134,7 @@ fs_streak_atual AS (
 SELECT
     doc.ID_CLIENTE,
     doc.ID_DOCUMENTO,
-    '{dt_ref}' AS DATA_REF,
+    CAST('{dt_ref}' AS DATE) AS DATA_REF,
     r.SOMA_RENDA_3M,
     r.MED_RENDA_3M,
     r.MIN_RENDA_3M,

@@ -1,7 +1,7 @@
 
 WITH tb_historico AS (
 
-    SELECT DISTINCT
+    SELECT
         ID_CLIENTE,
         ID_DOCUMENTO
     FROM credit_score.data.pagamentos
@@ -28,15 +28,6 @@ tb_porte AS (
         PORTE
     FROM credit_score.data.cadastral
 
-),
-
-tb_media_porte AS (
-    SELECT
-        p.PORTE,
-        AVG(m.NO_FUNCIONARIOS_ATUAL) AS MEDIA_PORTE_FUNCIONARIOS
-    FROM fs_marcos_func m
-    JOIN tb_porte p ON m.ID_CLIENTE = p.ID_CLIENTE
-    GROUP BY p.PORTE
 ),
 
 fs_marcos_func AS (
@@ -88,6 +79,16 @@ fs_marcos_func AS (
     GROUP BY ID_CLIENTE
 
 ),
+
+tb_media_porte AS (
+    SELECT
+        p.PORTE,
+        AVG(m.NO_FUNCIONARIOS_ATUAL) AS MEDIA_PORTE_FUNCIONARIOS
+    FROM fs_marcos_func m
+    JOIN tb_porte p ON m.ID_CLIENTE = p.ID_CLIENTE
+    GROUP BY p.PORTE
+),
+
 
 fs_crescimento_func AS (
 

@@ -67,7 +67,7 @@ fs_temporal AS (
 SELECT
     ID_CLIENTE,
     ID_DOCUMENTO,
-    '{dt_ref}' AS DATA_REF,
+    CAST('{dt_ref}' AS DATE) AS DATA_REF,
     DIAS_VENCIMENTO,
     DIAS_ULT_PAG,
     PRAZO_VENC,
