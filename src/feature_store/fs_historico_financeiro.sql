@@ -94,7 +94,7 @@ fs_historico_financeiro AS (
 SELECT
     d.ID_CLIENTE,
     d.ID_DOCUMENTO,
-    '{dt_ref}' AS DATA_REF,
+    CAST('{dt_ref}' AS DATE) AS DATA_REF,
     d.RAZAO_TAXA_VALOR_A_PAGAR,
     h.MED_DIFF_VALOR_RENDA_3M,
     h.MIN_DIFF_VALOR_RENDA_3M,

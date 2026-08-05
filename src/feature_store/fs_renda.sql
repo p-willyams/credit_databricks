@@ -5,17 +5,17 @@ WITH tb_historico AS (
 ),
 
 fs_documentos_unicos AS (
-    SELECT DISTINCT
+    SELECT
         ID_CLIENTE,
         ID_DOCUMENTO
     FROM tb_historico
 ),
 
-tb_renda AS (
+tb_renda_base AS (
     SELECT
         ID_CLIENTE,
         SAFRA_REF,
-        RENDA_MES_ANTERIOR
+        CAST(RENDA_MES_ANTERIOR AS DOUBLE) AS RENDA_MES_ANTERIOR
     FROM credit_score.data.info
     WHERE SAFRA_REF < '{dt_ref}'
 ),
@@ -23,20 +23,20 @@ tb_renda AS (
 fs_marcos AS (
     SELECT
         ID_CLIENTE,
-        MAX_BY(CAST(RENDA_MES_ANTERIOR AS DOUBLE), SAFRA_REF) AS RENDA_ATUAL,
+        MAX_BY(RENDA_MES_ANTERIOR, SAFRA_REF) AS RENDA_ATUAL,
         MAX_BY(
-            CASE WHEN SAFRA_REF <= date_add(MONTH, -3, '{dt_ref}') THEN CAST(RENDA_MES_ANTERIOR AS DOUBLE) END,
+            CASE WHEN SAFRA_REF <= date_add(MONTH, -3, '{dt_ref}') THEN RENDA_MES_ANTERIOR END,
             CASE WHEN SAFRA_REF <= date_add(MONTH, -3, '{dt_ref}') THEN SAFRA_REF END
         ) AS RENDA_3M_ATRAS,
         MAX_BY(
-            CASE WHEN SAFRA_REF <= date_add(MONTH, -6, '{dt_ref}') THEN CAST(RENDA_MES_ANTERIOR AS DOUBLE) END,
+            CASE WHEN SAFRA_REF <= date_add(MONTH, -6, '{dt_ref}') THEN RENDA_MES_ANTERIOR END,
             CASE WHEN SAFRA_REF <= date_add(MONTH, -6, '{dt_ref}') THEN SAFRA_REF END
         ) AS RENDA_6M_ATRAS,
         MAX_BY(
-            CASE WHEN SAFRA_REF <= date_add(YEAR, -1, '{dt_ref}') THEN CAST(RENDA_MES_ANTERIOR AS DOUBLE) END,
+            CASE WHEN SAFRA_REF <= date_add(YEAR, -1, '{dt_ref}') THEN RENDA_MES_ANTERIOR END,
             CASE WHEN SAFRA_REF <= date_add(YEAR, -1, '{dt_ref}') THEN SAFRA_REF END
         ) AS RENDA_1A_ATRAS
-    FROM tb_renda
+    FROM tb_renda_base
     GROUP BY ID_CLIENTE
 ),
 
@@ -74,7 +74,7 @@ fs_renda AS (
         STDDEV(CASE WHEN SAFRA_REF >= date_add(MONTH, -6, '{dt_ref}') THEN RENDA_MES_ANTERIOR END) AS STD_RENDA_6M,
         STDDEV(CASE WHEN SAFRA_REF >= date_add(YEAR, -1, '{dt_ref}') THEN RENDA_MES_ANTERIOR END) AS STD_RENDA_1A,
         STDDEV(RENDA_MES_ANTERIOR) AS STD_RENDA_VIDA
-    FROM tb_renda
+    FROM tb_renda_base
     GROUP BY ID_CLIENTE
 ),
 
@@ -89,7 +89,7 @@ fs_flag_queda AS (
             ) THEN 1
             ELSE 0
         END AS FLAG_QUEDA
-    FROM tb_renda
+    FROM tb_renda_base
 ),
 
 fs_ilhas AS (
@@ -117,7 +117,7 @@ fs_ultima_safra AS (
     SELECT
         ID_CLIENTE,
         MAX(SAFRA_REF) AS ULTIMA_SAFRA
-    FROM tb_renda
+    FROM tb_renda_base
     GROUP BY ID_CLIENTE
 ),
 
@@ -134,7 +134,7 @@ fs_streak_atual AS (
 SELECT
     doc.ID_CLIENTE,
     doc.ID_DOCUMENTO,
-    '{dt_ref}' AS DATA_REF,
+    CAST('{dt_ref}' AS DATE) AS DATA_REF,
     r.SOMA_RENDA_3M,
     r.MED_RENDA_3M,
     r.MIN_RENDA_3M,

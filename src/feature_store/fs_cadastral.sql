@@ -114,13 +114,12 @@ fs_cadastral_estado AS (
     FROM base
 
 )
-
 SELECT 
     ID_CLIENTE,
     ID_DOCUMENTO,
     DDD,
     DATA_CADASTRO,
-    '{dt_ref}' AS DATA_REF,
+    CAST('{dt_ref}' AS DATE) AS DATA_REF,
     DOMINIO_EMAIL,
     CEP_2_DIG,
     PORTE,
