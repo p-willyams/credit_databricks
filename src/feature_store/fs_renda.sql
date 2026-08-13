@@ -1,9 +1,11 @@
+-- Histórico de pagamentos até a data de referência
 WITH tb_historico AS (
     SELECT *
     FROM credit_score.data.pagamentos
     WHERE SAFRA_REF < '{dt_ref}'
 ),
 
+-- Seleção de documentos únicos por cliente
 fs_documentos_unicos AS (
     SELECT
         ID_CLIENTE,
@@ -11,6 +13,7 @@ fs_documentos_unicos AS (
     FROM tb_historico
 ),
 
+-- Base de renda até a data de referência
 tb_renda_base AS (
     SELECT
         ID_CLIENTE,
@@ -20,6 +23,7 @@ tb_renda_base AS (
     WHERE SAFRA_REF < '{dt_ref}'
 ),
 
+-- Marcos de renda: renda atual e em períodos anteriores
 fs_marcos AS (
     SELECT
         ID_CLIENTE,
@@ -40,6 +44,7 @@ fs_marcos AS (
     GROUP BY ID_CLIENTE
 ),
 
+-- Cálculo de crescimento absoluto e percentual da renda
 fs_crescimento AS (
     SELECT
         ID_CLIENTE,
@@ -52,6 +57,7 @@ fs_crescimento AS (
     FROM fs_marcos
 ),
 
+-- Estatísticas de renda por períodos
 fs_renda AS (
     SELECT
         ID_CLIENTE,
@@ -78,6 +84,7 @@ fs_renda AS (
     GROUP BY ID_CLIENTE
 ),
 
+-- Flag de queda de renda mês a mês
 fs_flag_queda AS (
     SELECT
         ID_CLIENTE,
@@ -92,6 +99,7 @@ fs_flag_queda AS (
     FROM tb_renda_base
 ),
 
+-- Identificação de blocos consecutivos de queda de renda
 fs_ilhas AS (
     SELECT
         ID_CLIENTE,
@@ -113,6 +121,7 @@ fs_blocos_queda AS (
     GROUP BY ID_CLIENTE, ILHA_ID
 ),
 
+-- Última safra de cada cliente
 fs_ultima_safra AS (
     SELECT
         ID_CLIENTE,
@@ -121,6 +130,7 @@ fs_ultima_safra AS (
     GROUP BY ID_CLIENTE
 ),
 
+-- Quantidade de meses consecutivos de queda até a última safra
 fs_streak_atual AS (
     SELECT
         u.ID_CLIENTE,
@@ -131,6 +141,7 @@ fs_streak_atual AS (
         AND u.ULTIMA_SAFRA = b.FIM_BLOCO
 )
 
+-- Seleção final com todas as métricas
 SELECT
     doc.ID_CLIENTE,
     doc.ID_DOCUMENTO,

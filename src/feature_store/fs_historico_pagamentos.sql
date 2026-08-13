@@ -7,8 +7,10 @@ WITH tb_historico AS (
         DATA_EMISSAO_DOCUMENTO,
         DATA_VENCIMENTO,
         DATA_PAGAMENTO,
+        -- Dias de atraso (positivo = atraso, negativo = antecipado)
         DATEDIFF(DATA_PAGAMENTO, DATA_VENCIMENTO) AS DIAS_ATRASO,
         VALOR_A_PAGAR,
+        -- Flags de status do pagamento
         CASE WHEN DATEDIFF(DATA_PAGAMENTO, DATA_VENCIMENTO) > 0 THEN 1 ELSE 0 END AS FLAG_ATRASO,
         CASE WHEN DATEDIFF(DATA_PAGAMENTO, DATA_VENCIMENTO) >= 5 THEN 1 ELSE 0 END AS FLAG_INADIMPLENCIA,
         CASE WHEN DATEDIFF(DATA_PAGAMENTO, DATA_VENCIMENTO) < 0 THEN 1 ELSE 0 END AS FLAG_ANTECIPADO,
@@ -17,6 +19,7 @@ WITH tb_historico AS (
         CASE WHEN DATEDIFF(DATA_PAGAMENTO, DATA_VENCIMENTO) <= 4 THEN 1 ELSE 0 END AS FLAG_FORA_INADIMPLENCIA,
         CASE WHEN DATEDIFF(DATA_PAGAMENTO, DATA_VENCIMENTO) < 0
              THEN ABS(DATEDIFF(DATA_PAGAMENTO, DATA_VENCIMENTO)) END AS DIAS_ANTECIPADO,
+        -- Prazo entre emissão e vencimento/pagamento
         DATEDIFF(DATA_VENCIMENTO, DATA_EMISSAO_DOCUMENTO) AS PRAZO_EMISSAO_VENCIMENTO,
         DATEDIFF(DATA_PAGAMENTO, DATA_EMISSAO_DOCUMENTO) AS DIAS_EMISSAO_PAGAMENTO,
         CASE WHEN DATEDIFF(DATA_VENCIMENTO, DATA_EMISSAO_DOCUMENTO) > 0
@@ -30,6 +33,7 @@ tb_historico_janelas AS (
 
     SELECT
         *,
+        -- Flags de janelas temporais
         SAFRA_REF > date_add(MONTH, -3, '{dt_ref}')  AS IN_3M,
         SAFRA_REF > date_add(MONTH, -6, '{dt_ref}')  AS IN_6M,
         SAFRA_REF > date_add(YEAR, -1, '{dt_ref}')   AS IN_12M
@@ -78,7 +82,6 @@ fs_historico_pagamentos AS (
         MAX(FLAG_ATRASO)                                         AS QT_ATRASO_MAX_VIDA,
 
         -- ===== Atraso em Dias =====
-        -- CORRIGIDO: COALESCE(..., 0) adicionado nas SOMAs (mesmo bug do DIAS_ANTECIPADO)
         COALESCE(SUM(CASE WHEN IN_3M THEN DIAS_ATRASO END), 0)  AS DIAS_ATRASO_SOMA_3M,
         AVG(CASE WHEN IN_3M THEN DIAS_ATRASO END)  AS DIAS_ATRASO_MEDIA_3M,
         MIN(CASE WHEN IN_3M THEN DIAS_ATRASO END)  AS DIAS_ATRASO_MIN_3M,
@@ -120,11 +123,7 @@ fs_historico_pagamentos AS (
         MIN(VALOR_A_PAGAR)              AS VALOR_A_PAGAR_MIN_VIDA,
         MAX(VALOR_A_PAGAR)              AS VALOR_A_PAGAR_MAX_VIDA,
 
-        -- ===== Recência =====
-        -- OBS: ficam NULL quando o evento nunca ocorreu (ex: cliente nunca atrasou).
-        -- Isso é esperado - não há "dias desde" um evento que não existe.
-        -- Se seu modelo exigir valor numérico, considere um sentinela alto (ex: 9999)
-        -- para indicar "nunca aconteceu" de forma explícita.
+        -- ===== Recência: dias desde último evento relevante =====
         DATEDIFF('{dt_ref}', MAX(CASE WHEN FLAG_ATRASO = 1 THEN DATA_VENCIMENTO END))        AS DIAS_DESDE_ULTIMO_ATRASO,
         DATEDIFF('{dt_ref}', MAX(CASE WHEN FLAG_INADIMPLENCIA = 1 THEN DATA_VENCIMENTO END)) AS DIAS_DESDE_ULTIMA_INADIMPLENCIA,
         DATEDIFF('{dt_ref}', MAX(DATA_PAGAMENTO))                                            AS DIAS_DESDE_ULTIMO_PAGAMENTO,
@@ -136,7 +135,6 @@ fs_historico_pagamentos AS (
         COALESCE(SUM(FLAG_ANTECIPADO), 0)                            AS QT_ANTECIPADO_VIDA,
 
         -- ===== Média e Soma de Dias Antecipados =====
-        -- CORRIGIDO: COALESCE(..., 0) adicionado nas SOMAs
         COALESCE(SUM(CASE WHEN IN_3M THEN DIAS_ANTECIPADO END), 0)  AS DIAS_ANTECIPADO_SOMA_3M,
         AVG(CASE WHEN IN_3M THEN DIAS_ANTECIPADO END)  AS DIAS_ANTECIPADO_MEDIA_3M,
 
@@ -227,6 +225,7 @@ SELECT
 
     CAST('{dt_ref}' AS DATE) AS DATA_REF,
 
+    -- Métricas de atraso
     f.QT_ATRASO_SOMA_3M,
     f.QT_ATRASO_MEDIA_3M,
     f.QT_ATRASO_MIN_3M,
@@ -267,6 +266,7 @@ SELECT
     f.DIAS_ATRASO_MIN_VIDA,
     f.DIAS_ATRASO_MAX_VIDA,
 
+    -- Métricas de valor pago
     f.VALOR_A_PAGAR_SOMA_3M,
     f.VALOR_A_PAGAR_MEDIA_3M,
     f.VALOR_A_PAGAR_MIN_3M,
@@ -287,10 +287,12 @@ SELECT
     f.VALOR_A_PAGAR_MIN_VIDA,
     f.VALOR_A_PAGAR_MAX_VIDA,
 
+    -- Recência dos eventos
     f.DIAS_DESDE_ULTIMO_ATRASO,
     f.DIAS_DESDE_ULTIMA_INADIMPLENCIA,
     f.DIAS_DESDE_ULTIMO_PAGAMENTO,
 
+    -- Antecipação
     f.QT_ANTECIPADO_3M,
     f.QT_ANTECIPADO_6M,
     f.QT_ANTECIPADO_12M,
@@ -308,16 +310,19 @@ SELECT
     f.DIAS_ANTECIPADO_SOMA_VIDA,
     f.DIAS_ANTECIPADO_MEDIA_VIDA,
 
+    -- Pagamentos no vencimento
     f.QT_NO_VENCIMENTO_3M,
     f.QT_NO_VENCIMENTO_6M,
     f.QT_NO_VENCIMENTO_12M,
     f.QT_NO_VENCIMENTO_VIDA,
 
+    -- Boletos emitidos
     f.QT_BOLETOS_EMITIDOS_3M,
     f.QT_BOLETOS_EMITIDOS_6M,
     f.QT_BOLETOS_EMITIDOS_12M,
     f.QT_BOLETOS_EMITIDOS_VIDA,
 
+    -- Percentuais de comportamento
     f.PCT_EM_DIA_3M,
     f.PCT_EM_DIA_6M,
     f.PCT_EM_DIA_12M,
@@ -328,6 +333,7 @@ SELECT
     f.PCT_FORA_INADIMPLENCIA_12M,
     f.PCT_FORA_INADIMPLENCIA_VIDA,
 
+    -- Prazo entre emissão e vencimento
     f.PRAZO_EMISSAO_VENCIMENTO_MEDIA_3M,
     f.PRAZO_EMISSAO_VENCIMENTO_MIN_3M,
     f.PRAZO_EMISSAO_VENCIMENTO_MAX_3M,
@@ -344,11 +350,13 @@ SELECT
     f.PRAZO_EMISSAO_VENCIMENTO_MIN_VIDA,
     f.PRAZO_EMISSAO_VENCIMENTO_MAX_VIDA,
 
+    -- Dias entre emissão e pagamento
     f.DIAS_EMISSAO_PAGAMENTO_MEDIA_3M,
     f.DIAS_EMISSAO_PAGAMENTO_MEDIA_6M,
     f.DIAS_EMISSAO_PAGAMENTO_MEDIA_12M,
     f.DIAS_EMISSAO_PAGAMENTO_MEDIA_VIDA,
 
+    -- Valor da cobrança por dia
     f.VALOR_COBRANCA_DIA_MEDIA_3M,
     f.VALOR_COBRANCA_DIA_MEDIA_6M,
     f.VALOR_COBRANCA_DIA_MEDIA_12M,
