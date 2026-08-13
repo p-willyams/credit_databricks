@@ -1,0 +1,7 @@
+# Databricks Feature Engineering
+databricks-feature-engineering
+
+# Machine Learning
+xgboost
+
+# Nota: pandas, numpy, scikit-learn, mlflow e scipy já vêm pré-instalados no Databricks Runtime
