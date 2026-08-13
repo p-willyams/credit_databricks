@@ -1,3 +1,4 @@
+-- Gera datas de referência mensais entre 2018-10-01 e 2021-06-01
 WITH datas AS (
     SELECT explode(
         sequence(
@@ -8,6 +9,7 @@ WITH datas AS (
     ) AS DATA_REF
 ),
 
+-- Marca inadimplência (FL_INAD) se pagamento atrasou 5 dias ou mais
 flag_id as (
     SELECT
         p.ID_DOCUMENTO,
@@ -22,6 +24,7 @@ flag_id as (
         ON p.SAFRA_REF < d.DATA_REF
 )
 
+-- Seleciona até 2 registros aleatórios por documento
 SELECT *
 FROM flag_id
 QUALIFY ROW_NUMBER() OVER (

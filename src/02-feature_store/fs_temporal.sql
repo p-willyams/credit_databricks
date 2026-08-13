@@ -1,15 +1,19 @@
+-- Histórico de pagamentos até a data de referência
 WITH tb_historico AS (
     SELECT *
     FROM credit_score.data.pagamentos
     WHERE SAFRA_REF < '{dt_ref}'
 ),
 
+-- Cálculo de métricas temporais para cada cliente e documento
 fs_temporal AS (
     SELECT
         ID_CLIENTE,
         ID_DOCUMENTO,
         SAFRA_REF,
+        -- Dias até o vencimento do documento em relação à data de referência
         DATEDIFF(DATA_VENCIMENTO, '{dt_ref}') AS DIAS_VENCIMENTO,
+        -- Dias desde o último pagamento realizado antes da data de referência
         DATEDIFF(
             '{dt_ref}',
             LAST_VALUE(
@@ -23,7 +27,9 @@ fs_temporal AS (
                 ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
             )
         ) AS DIAS_ULT_PAG,
+        -- Prazo até o vencimento do documento em relação à data de referência
         DATEDIFF(DATA_VENCIMENTO,'{dt_ref}') AS PRAZO_VENC,
+        -- Dias desde a última emissão de documento antes da data de referência
         DATEDIFF(
             '{dt_ref}',
             MAX(
@@ -38,6 +44,7 @@ fs_temporal AS (
     FROM tb_historico
 )
 
+-- Seleção final das métricas temporais
 SELECT
     ID_CLIENTE,
     ID_DOCUMENTO,

@@ -1,9 +1,11 @@
+-- Histórico de pagamentos até a data de referência
 WITH tb_historico AS (
     SELECT *
     FROM credit_score.data.pagamentos
     WHERE SAFRA_REF < '{dt_ref}'
 ),
 
+-- Informações de renda por cliente e safra
 tb_renda AS (
     SELECT
         ID_CLIENTE,
@@ -12,6 +14,7 @@ tb_renda AS (
     FROM credit_score.data.info
 ),
 
+-- Total de valor a pagar por cliente e safra
 fs_mensal AS (
     SELECT
         ID_CLIENTE,
@@ -21,6 +24,7 @@ fs_mensal AS (
     GROUP BY ID_CLIENTE, SAFRA_REF
 ),
 
+-- Base de features mensais: diferença e razão entre valor a pagar e renda
 fs_base AS (
     SELECT
         m.ID_CLIENTE,
@@ -35,6 +39,7 @@ fs_base AS (
         AND m.SAFRA_REF = i.SAFRA_REF
 ),
 
+-- Razão entre taxa e valor a pagar por documento
 fs_documento AS (
     SELECT
         ID_CLIENTE,
@@ -43,46 +48,47 @@ fs_documento AS (
     FROM tb_historico
 ),
 
+-- Features históricas agregadas por cliente
 fs_historico_financeiro AS (
     SELECT
         ID_CLIENTE,
 
-        -- Últimos 3 meses (a partir de dt_ref)
+        -- Diferença valor-renda: últimos 3 meses
         AVG(CASE WHEN SAFRA_REF >= date_add(MONTH, -3, '{dt_ref}') THEN DIFERENCA_VALOR_RENDA END) AS MED_DIFF_VALOR_RENDA_3M,
         MIN(CASE WHEN SAFRA_REF >= date_add(MONTH, -3, '{dt_ref}') THEN DIFERENCA_VALOR_RENDA END) AS MIN_DIFF_VALOR_RENDA_3M,
         MAX(CASE WHEN SAFRA_REF >= date_add(MONTH, -3, '{dt_ref}') THEN DIFERENCA_VALOR_RENDA END) AS MAX_DIFF_VALOR_RENDA_3M,
 
-        -- Últimos 6 meses (a partir de dt_ref)
+        -- Diferença valor-renda: últimos 6 meses
         AVG(CASE WHEN SAFRA_REF >= date_add(MONTH, -6, '{dt_ref}') THEN DIFERENCA_VALOR_RENDA END) AS MED_DIFF_VALOR_RENDA_6M,
         MIN(CASE WHEN SAFRA_REF >= date_add(MONTH, -6, '{dt_ref}') THEN DIFERENCA_VALOR_RENDA END) AS MIN_DIFF_VALOR_RENDA_6M,
         MAX(CASE WHEN SAFRA_REF >= date_add(MONTH, -6, '{dt_ref}') THEN DIFERENCA_VALOR_RENDA END) AS MAX_DIFF_VALOR_RENDA_6M,
 
-        -- Último 1 ano (a partir de dt_ref)
+        -- Diferença valor-renda: último ano
         AVG(CASE WHEN SAFRA_REF >= date_add(YEAR, -1, '{dt_ref}') THEN DIFERENCA_VALOR_RENDA END) AS MED_DIFF_VALOR_RENDA_1A,
         MIN(CASE WHEN SAFRA_REF >= date_add(YEAR, -1, '{dt_ref}') THEN DIFERENCA_VALOR_RENDA END) AS MIN_DIFF_VALOR_RENDA_1A,
         MAX(CASE WHEN SAFRA_REF >= date_add(YEAR, -1, '{dt_ref}') THEN DIFERENCA_VALOR_RENDA END) AS MAX_DIFF_VALOR_RENDA_1A,
 
-        -- Vida toda (todo o histórico < dt_ref, sem filtro adicional)
+        -- Diferença valor-renda: todo histórico
         AVG(DIFERENCA_VALOR_RENDA) AS MED_DIFF_VALOR_RENDA_VIDA,
         MIN(DIFERENCA_VALOR_RENDA) AS MIN_DIFF_VALOR_RENDA_VIDA,
         MAX(DIFERENCA_VALOR_RENDA) AS MAX_DIFF_VALOR_RENDA_VIDA,
 
-        -- Últimos 3 meses (a partir de dt_ref)
+        -- Razão valor-renda: últimos 3 meses
         AVG(CASE WHEN SAFRA_REF >= date_add(MONTH, -3, '{dt_ref}') THEN RAZAO_VALOR_RENDA END) AS MED_RAZAO_VALOR_RENDA_3M,
         MIN(CASE WHEN SAFRA_REF >= date_add(MONTH, -3, '{dt_ref}') THEN RAZAO_VALOR_RENDA END) AS MIN_RAZAO_VALOR_RENDA_3M,
         MAX(CASE WHEN SAFRA_REF >= date_add(MONTH, -3, '{dt_ref}') THEN RAZAO_VALOR_RENDA END) AS MAX_RAZAO_VALOR_RENDA_3M,
 
-        -- Últimos 6 meses (a partir de dt_ref)
+        -- Razão valor-renda: últimos 6 meses
         AVG(CASE WHEN SAFRA_REF >= date_add(MONTH, -6, '{dt_ref}') THEN RAZAO_VALOR_RENDA END) AS MED_RAZAO_VALOR_RENDA_6M,
         MIN(CASE WHEN SAFRA_REF >= date_add(MONTH, -6, '{dt_ref}') THEN RAZAO_VALOR_RENDA END) AS MIN_RAZAO_VALOR_RENDA_6M,
         MAX(CASE WHEN SAFRA_REF >= date_add(MONTH, -6, '{dt_ref}') THEN RAZAO_VALOR_RENDA END) AS MAX_RAZAO_VALOR_RENDA_6M,
 
-        -- Último 1 ano (a partir de dt_ref)
+        -- Razão valor-renda: último ano
         AVG(CASE WHEN SAFRA_REF >= date_add(YEAR, -1, '{dt_ref}') THEN RAZAO_VALOR_RENDA END) AS MED_RAZAO_VALOR_RENDA_1A,
         MIN(CASE WHEN SAFRA_REF >= date_add(YEAR, -1, '{dt_ref}') THEN RAZAO_VALOR_RENDA END) AS MIN_RAZAO_VALOR_RENDA_1A,
         MAX(CASE WHEN SAFRA_REF >= date_add(YEAR, -1, '{dt_ref}') THEN RAZAO_VALOR_RENDA END) AS MAX_RAZAO_VALOR_RENDA_1A,
 
-        -- Vida toda (todo o histórico < dt_ref, sem filtro adicional)
+        -- Razão valor-renda: todo histórico
         AVG(RAZAO_VALOR_RENDA) AS MED_RAZAO_VALOR_RENDA_VIDA,
         MIN(RAZAO_VALOR_RENDA) AS MIN_RAZAO_VALOR_RENDA_VIDA,
         MAX(RAZAO_VALOR_RENDA) AS MAX_RAZAO_VALOR_RENDA_VIDA
@@ -91,6 +97,7 @@ fs_historico_financeiro AS (
     GROUP BY ID_CLIENTE
 )
 
+-- Seleção final: features por documento e cliente
 SELECT
     d.ID_CLIENTE,
     d.ID_DOCUMENTO,

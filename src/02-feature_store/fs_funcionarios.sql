@@ -1,73 +1,60 @@
+-- Histórico de documentos por cliente, filtrando por referência
 WITH tb_historico AS (
-
     SELECT
         ID_CLIENTE,
         ID_DOCUMENTO
     FROM credit_score.data.pagamentos
-        WHERE SAFRA_REF < '{dt_ref}'
-
+    WHERE SAFRA_REF < '{dt_ref}'
 ),
 
+-- Funcionários e renda por cliente, filtrando por referência
 tb_funcionarios AS (
-
     SELECT
         ID_CLIENTE,
         SAFRA_REF,
         NO_FUNCIONARIOS,
         RENDA_MES_ANTERIOR
     FROM credit_score.data.info
-        WHERE SAFRA_REF < '{dt_ref}'
-
+    WHERE SAFRA_REF < '{dt_ref}'
 ),
 
+-- Porte cadastrado por cliente
 tb_porte AS (
-
     SELECT
         ID_CLIENTE,
         PORTE
     FROM credit_score.data.cadastral
-
 ),
 
+-- Marcos históricos de funcionários e flags de disponibilidade de histórico
 fs_marcos_func AS (
-
     SELECT
-
         ID_CLIENTE,
-
         MAX_BY(NO_FUNCIONARIOS, SAFRA_REF) AS NO_FUNCIONARIOS_ATUAL,
-
         MAX_BY(
             CASE WHEN SAFRA_REF <= date_add(MONTH,-3,'{dt_ref}') THEN NO_FUNCIONARIOS END,
             CASE WHEN SAFRA_REF <= date_add(MONTH,-3,'{dt_ref}') THEN SAFRA_REF END
         ) AS NO_FUNCIONARIOS_3M,
-
         MAX_BY(
             CASE WHEN SAFRA_REF <= date_add(MONTH,-6,'{dt_ref}') THEN NO_FUNCIONARIOS END,
             CASE WHEN SAFRA_REF <= date_add(MONTH,-6,'{dt_ref}') THEN SAFRA_REF END
         ) AS NO_FUNCIONARIOS_6M,
-
         MAX_BY(
             CASE WHEN SAFRA_REF <= date_add(YEAR,-1,'{dt_ref}') THEN NO_FUNCIONARIOS END,
             CASE WHEN SAFRA_REF <= date_add(YEAR,-1,'{dt_ref}') THEN SAFRA_REF END
         ) AS NO_FUNCIONARIOS_12M,
-
         MIN_BY(NO_FUNCIONARIOS, SAFRA_REF) AS NO_FUNCIONARIOS_VIDA,
-
         MAX_BY(RENDA_MES_ANTERIOR, SAFRA_REF) AS RENDA_ATUAL,
-
-        -- NOVO: flags de disponibilidade de histórico (permitem distinguir
-        -- "sem dado" de "caiu para zero" depois da imputação)
+        -- Flags de disponibilidade de histórico
         MAX(CASE WHEN SAFRA_REF <= date_add(MONTH,-3,'{dt_ref}') THEN 1 ELSE 0 END) AS FLAG_HISTORICO_3M,
         MAX(CASE WHEN SAFRA_REF <= date_add(MONTH,-6,'{dt_ref}') THEN 1 ELSE 0 END) AS FLAG_HISTORICO_6M,
         MAX(CASE WHEN SAFRA_REF <= date_add(YEAR,-1,'{dt_ref}')  THEN 1 ELSE 0 END) AS FLAG_HISTORICO_12M,
         COUNT(*) AS QT_SAFRAS_HISTORICO
-
     FROM tb_funcionarios
     GROUP BY ID_CLIENTE
-
 ),
 
+-- Média de funcionários por porte
 tb_media_porte AS (
     SELECT
         p.PORTE,
@@ -77,156 +64,102 @@ tb_media_porte AS (
     GROUP BY p.PORTE
 ),
 
--- NOVO: média global, usada como fallback quando o cliente não tem PORTE cadastrado
+-- Média global de funcionários (fallback)
 tb_media_geral AS (
     SELECT AVG(NO_FUNCIONARIOS_ATUAL) AS MEDIA_GERAL_FUNCIONARIOS
     FROM fs_marcos_func
 ),
 
+-- Cálculo de crescimento de funcionários
 fs_crescimento_func AS (
-
     SELECT
-
         *,
-
-        -- Se NO_FUNCIONARIOS_3M é NULL por falta de histórico (FLAG=0), o crescimento
-        -- fica NULL de propósito (não há base de comparação). Se é NULL só por
-        -- NULLIF (denominador=0), também fica NULL (crescimento % indefinido a partir de 0).
-        -- Ambos os casos ficam sinalizados pela FLAG_HISTORICO_3M/6M/12M.
-        (NO_FUNCIONARIOS_ATUAL - NO_FUNCIONARIOS_3M)
-            / NULLIF(NO_FUNCIONARIOS_3M, 0) AS CRESCIMENTO_FUNC_3M,
-
-        (NO_FUNCIONARIOS_ATUAL - NO_FUNCIONARIOS_6M)
-            / NULLIF(NO_FUNCIONARIOS_6M, 0) AS CRESCIMENTO_FUNC_6M,
-
-        (NO_FUNCIONARIOS_ATUAL - NO_FUNCIONARIOS_12M)
-            / NULLIF(NO_FUNCIONARIOS_12M, 0) AS CRESCIMENTO_FUNC_12M,
-
-        (NO_FUNCIONARIOS_ATUAL - NO_FUNCIONARIOS_VIDA)
-            / NULLIF(NO_FUNCIONARIOS_VIDA, 0) AS CRESCIMENTO_FUNC_VIDA
-
+        -- Crescimento em diferentes períodos, considerando flags de histórico
+        (NO_FUNCIONARIOS_ATUAL - NO_FUNCIONARIOS_3M) / NULLIF(NO_FUNCIONARIOS_3M, 0) AS CRESCIMENTO_FUNC_3M,
+        (NO_FUNCIONARIOS_ATUAL - NO_FUNCIONARIOS_6M) / NULLIF(NO_FUNCIONARIOS_6M, 0) AS CRESCIMENTO_FUNC_6M,
+        (NO_FUNCIONARIOS_ATUAL - NO_FUNCIONARIOS_12M) / NULLIF(NO_FUNCIONARIOS_12M, 0) AS CRESCIMENTO_FUNC_12M,
+        (NO_FUNCIONARIOS_ATUAL - NO_FUNCIONARIOS_VIDA) / NULLIF(NO_FUNCIONARIOS_VIDA, 0) AS CRESCIMENTO_FUNC_VIDA
     FROM fs_marcos_func
-
 ),
 
+-- Variações mensais de funcionários
 fs_variacoes AS (
-
     SELECT
-
         ID_CLIENTE,
-
-        -- COALESCE para 0: com 1 única safra não há variação mês a mês para medir;
-        -- tratamos como "nenhuma variação observada" e sinalizamos com a flag abaixo
+        -- COALESCE para 0: com 1 única safra não há variação mês a mês para medir
         COALESCE(MAX(VARIACAO), 0) AS MAIOR_CRESCIMENTO_MENSAL,
         COALESCE(MIN(VARIACAO), 0) AS MAIOR_QUEDA_MENSAL,
         MAX(CASE WHEN VARIACAO IS NOT NULL THEN 1 ELSE 0 END) AS FLAG_HISTORICO_VARIACAO
-
     FROM (
-
         SELECT
-
             ID_CLIENTE,
-
             (
                 NO_FUNCIONARIOS
                 - LAG(NO_FUNCIONARIOS) OVER (PARTITION BY ID_CLIENTE ORDER BY SAFRA_REF)
-            )
-            /
+            ) /
             NULLIF(
                 LAG(NO_FUNCIONARIOS) OVER (PARTITION BY ID_CLIENTE ORDER BY SAFRA_REF),
                 0
             ) AS VARIACAO
-
         FROM tb_funcionarios
-
     ) x
-
     GROUP BY ID_CLIENTE
-
 ),
 
+-- Consolidado de métricas por cliente
 fs_funcionarios AS (
-
     SELECT
-
         c.ID_CLIENTE,
-
         c.NO_FUNCIONARIOS_ATUAL,
         c.NO_FUNCIONARIOS_3M,
         c.NO_FUNCIONARIOS_6M,
         c.NO_FUNCIONARIOS_12M,
         c.NO_FUNCIONARIOS_VIDA,
-
         c.FLAG_HISTORICO_3M,
         c.FLAG_HISTORICO_6M,
         c.FLAG_HISTORICO_12M,
         c.QT_SAFRAS_HISTORICO,
-
         c.CRESCIMENTO_FUNC_3M,
         c.CRESCIMENTO_FUNC_6M,
         c.CRESCIMENTO_FUNC_12M,
         c.CRESCIMENTO_FUNC_VIDA,
-
         v.MAIOR_CRESCIMENTO_MENSAL,
         v.MAIOR_QUEDA_MENSAL,
         v.FLAG_HISTORICO_VARIACAO,
-
         c.RENDA_ATUAL / NULLIF(c.NO_FUNCIONARIOS_ATUAL, 0) AS RAZAO_RENDA_POR_FUNCIONARIO,
-
         -- Fallback: se o cliente não tem PORTE cadastrado (mp NULL), usa a média geral
-        c.NO_FUNCIONARIOS_ATUAL - COALESCE(mp.MEDIA_PORTE_FUNCIONARIOS, mg.MEDIA_GERAL_FUNCIONARIOS)
-            AS DIF_PARA_MEDIA_PORTE,
-
+        c.NO_FUNCIONARIOS_ATUAL - COALESCE(mp.MEDIA_PORTE_FUNCIONARIOS, mg.MEDIA_GERAL_FUNCIONARIOS) AS DIF_PARA_MEDIA_PORTE,
         CASE WHEN mp.MEDIA_PORTE_FUNCIONARIOS IS NULL THEN 1 ELSE 0 END AS FLAG_PORTE_AUSENTE
-
     FROM fs_crescimento_func c
-
-    LEFT JOIN tb_porte tp
-      ON c.ID_CLIENTE = tp.ID_CLIENTE
-
-    LEFT JOIN tb_media_porte mp
-      ON tp.PORTE = mp.PORTE
-
-    LEFT JOIN fs_variacoes v
-      ON c.ID_CLIENTE = v.ID_CLIENTE
-
+    LEFT JOIN tb_porte tp ON c.ID_CLIENTE = tp.ID_CLIENTE
+    LEFT JOIN tb_media_porte mp ON tp.PORTE = mp.PORTE
+    LEFT JOIN fs_variacoes v ON c.ID_CLIENTE = v.ID_CLIENTE
     CROSS JOIN tb_media_geral mg
-
 )
 
+-- Resultado final: métricas por documento e cliente
 SELECT
-
     h.ID_DOCUMENTO,
     h.ID_CLIENTE,
-
     CAST('{dt_ref}' AS DATE) AS DATA_REF,
-
     f.NO_FUNCIONARIOS_ATUAL,
     f.NO_FUNCIONARIOS_3M,
     f.NO_FUNCIONARIOS_6M,
     f.NO_FUNCIONARIOS_12M,
     f.NO_FUNCIONARIOS_VIDA,
-
     f.FLAG_HISTORICO_3M,
     f.FLAG_HISTORICO_6M,
     f.FLAG_HISTORICO_12M,
     f.QT_SAFRAS_HISTORICO,
-
     f.CRESCIMENTO_FUNC_3M,
     f.CRESCIMENTO_FUNC_6M,
     f.CRESCIMENTO_FUNC_12M,
     f.CRESCIMENTO_FUNC_VIDA,
-
     f.MAIOR_CRESCIMENTO_MENSAL,
     f.MAIOR_QUEDA_MENSAL,
     f.FLAG_HISTORICO_VARIACAO,
-
     f.RAZAO_RENDA_POR_FUNCIONARIO,
-
     f.DIF_PARA_MEDIA_PORTE,
     f.FLAG_PORTE_AUSENTE
-
 FROM tb_historico h
-
-LEFT JOIN fs_funcionarios f
-    ON h.ID_CLIENTE = f.ID_CLIENTE
+LEFT JOIN fs_funcionarios f ON h.ID_CLIENTE = f.ID_CLIENTE
