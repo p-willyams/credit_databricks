@@ -1,3 +1,4 @@
+<img width="1920" height="1080" alt="Credit risk" src="https://github.com/user-attachments/assets/cb1dd443-d37c-44dc-8e80-94322f8a33b5" />
 
 ## Visão Geral do Projeto
 
