@@ -1,19 +1,19 @@
 -- Payment history up to reference date
-WITH tb_historico AS (
+WITH payment_history AS (
     SELECT *
     FROM credit_score.data.pagamentos
     WHERE SAFRA_REF < '{dt_ref}'
 ),
 
--- Temporal metrics calculation para cada cliente e documento
+-- Temporal metrics calculation for each client and document
 fs_temporal AS (
     SELECT
-        ID_CLIENTE,
-        ID_DOCUMENTO,
-        SAFRA_REF,
-        -- Days until document due date em relação à data de referência
-        DATEDIFF(DATA_VENCIMENTO, '{dt_ref}') AS DIAS_VENCIMENTO,
-        -- Days since last payment realizado antes da data de referência
+        ID_CLIENTE AS CLIENT_ID,
+        ID_DOCUMENTO AS DOCUMENT_ID,
+        SAFRA_REF AS REF_BATCH,
+        -- Days until document due date in relation to the reference date
+        DATEDIFF(DATA_VENCIMENTO, '{dt_ref}') AS DAYS_UNTIL_DUE,
+        -- Days since last payment made before the reference date
         DATEDIFF(
             '{dt_ref}',
             LAST_VALUE(
@@ -26,10 +26,10 @@ fs_temporal AS (
                 ORDER BY SAFRA_REF
                 ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
             )
-        ) AS DIAS_ULT_PAG,
-        -- Prazo até o vencimento do documento em relação à data de referência
-        DATEDIFF(DATA_VENCIMENTO,'{dt_ref}') AS PRAZO_VENC,
-        -- Dias desde a última emissão de documento antes da data de referência
+        ) AS DAYS_SINCE_LAST_PAYMENT,
+        -- Term until document due date in relation to the reference date
+        DATEDIFF(DATA_VENCIMENTO, '{dt_ref}') AS TERM_UNTIL_DUE,
+        -- Days since the last document issued before the reference date
         DATEDIFF(
             '{dt_ref}',
             MAX(
@@ -40,17 +40,17 @@ fs_temporal AS (
             ) OVER (
                 PARTITION BY ID_CLIENTE
             )
-        ) AS DIAS_ULT_EMISSAO
-    FROM tb_historico
+        ) AS DAYS_SINCE_LAST_ISSUE
+    FROM payment_history
 )
 
--- Seleção final das métricas temporais
+-- Final selection of temporal metrics
 SELECT
-    ID_CLIENTE,
-    ID_DOCUMENTO,
-    CAST('{dt_ref}' AS DATE) AS DATA_REF,
-    DIAS_VENCIMENTO,
-    DIAS_ULT_PAG,
-    PRAZO_VENC,
-    DIAS_ULT_EMISSAO
+    CLIENT_ID,
+    DOCUMENT_ID,
+    CAST('{dt_ref}' AS DATE) AS REF_DATE,
+    DAYS_UNTIL_DUE,
+    DAYS_SINCE_LAST_PAYMENT,
+    TERM_UNTIL_DUE,
+    DAYS_SINCE_LAST_ISSUE
 FROM fs_temporal
