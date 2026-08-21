@@ -4,15 +4,15 @@
 
 ## Project Overview
 
-A **machine learning model for credit default prediction** that reduced financial losses by **R$ 4.8 million** and generated an **additional R$ 31.4 million** in financial value while maintaining the same credit approval rate.
+A **machine learning model for credit default prediction** that reduced financial losses by **R$ 2.29 million** and generated an **additional R$ 41.4 million** in financial value while maintaining the same credit approval rate.
 
 ### Highlights
 
-* **AUC-ROC: 0.9738** | **KS: 0.8497** — Strong discriminative power
+* **AUC-ROC: 0.9764** | **KS: 0.8497** — Strong discriminative power
 
-* **49% less default** among approved clients compared to the current policy
+* **53% less default** among approved clients compared to the current policy
 
-* **21% reduction** in Loss Rate
+* **30% reduction** in Loss Rate
 
 * **100+ features** extracted from payment history, registration and behavioral data
 
@@ -66,26 +66,19 @@ Project developed in **Databricks** using Feature Store, Spark, and MLflow.
 
 ## Model Performance
 
-The final model (**XGBoost**) was evaluated on three datasets:
+Confusion matrix for threshold 0.28 on the test set:
 
-| Metric   | Train   | Validation | Test       |
-| -------- | ------- | ---------- | ---------- |
-| AUC-ROC  | 0.9964  | 0.9759     | **0.9738** |
-| KS       | 0.9437  | 0.8471     | **0.8497** |
+[[26780   694]
+ [  558  1423]]
+
 
 **Test set results:**
 
-* AUC-ROC: **0.9738**
-
-* KS: **0.8497**
-
-* F1-Score: **0.6658**
-
-* Accuracy: **95.41%**
-
-* Precision: **64.43%**
-
-* Recall: **68.88%**
+* Accuracy:  **0.9575**
+* Precision: **0.6722**
+* Recall:    **0.7183**
+* F1 Score:  **0.6945**
+* AUC-ROC:   **0.9764**
 
 Validation and test results are close, indicating **good generalization ability**.
 
@@ -95,15 +88,15 @@ Validation and test results are close, indicating **good generalization ability*
 
 To verify if the predicted probability captures different risk levels, clients were grouped by score range:
 
-| Score Range   | Observed Default Rate |
-| ------------- | --------------------:|
-| 0.00 – 0.10   |                   1% |
-| 0.10 – 0.20   |                  24% |
-| 0.20 – 0.30   |                  34% |
-| 0.30 – 0.40   |                  40% |
-| 0.40 – 0.50   |                  50% |
-| 0.50 – 0.60   |                  56% |
-| 0.60 – 1.00   |                  79% |
+ Score Range   | Observed Default Rate |
+ ------------- | --------------------:|
+ 0.00 – 0.10   |                   1% |
+ 0.10 – 0.20   |                  24% |
+ 0.20 – 0.30   |                  34% |
+ 0.30 – 0.40   |                  40% |
+ 0.40 – 0.50   |                  50% |
+ 0.50 – 0.60   |                  56% |
+ 0.60 – 1.00   |                  79% |
 
 Results show a **clear relationship between score and observed default**, indicating excellent **risk ranking capability**.
 
@@ -111,30 +104,30 @@ Results show a **clear relationship between score and observed default**, indica
 
 ## Financial Impact
 
-Comparison between the model and the existing credit policy (proxy), both with a **90.50% approval rate**:
+Comparison between the model and the existing credit policy (proxy), both with a **90.34% approval rate**:
 
-| Indicator                 | Proxy        | Model          | Improvement |
-| ------------------------- | -----------: | -------------: | ----------: |
-| Approval rate             | 90.50%       | 90.50%         | —           |
-| Default rate (approved)   | 2.70%        | **1.38%**      | **-49%**    |
-| Loss Rate                 | 1.87%        | **1.48%**      | **-21%**    |
-| Approved amount            | R$ 1.345 bi  | **R$ 1.367 bi** | +R$ 21.8 mi |
-| Lost amount               | R$ 25.1 mi   | **R$ 20.3 mi** | **-R$ 4.8 mi** |
-| Financial result          | R$ 1.320 bi  | **R$ 1.347 bi** | **+R$ 31.4 mi** |
+ Indicator                 | Proxy        | Model          | Improvement |
+ ------------------------- | -----------: | -------------: | ----------: |
+ Approval rate             | 90.34%       | 90.34%         | —           |
+ Default rate (approved)   | 2.71%        | **1.28%**      | **-53%**    |
+ Loss Rate                 | 2.38%        | **1.67%**      | **-30%**    |
+ Approved amount           | 1,351,959,098 | **1,369,286,836** | +17,327,738 |
+ Lost amount               | 32,232,028   | **22,861,917** | **-9,370,111** |
+ Financial result          | 1,319,727,070 | **1,346,424,919** | **+26,697,849** |
 
 ### Estimated Gains
 
 Keeping the same approval rate, the model delivers:
 
-* **49% less default** among approved clients
+* **53% less default** among approved clients
 
-* **21% reduction** in Loss Rate
+* **30% reduction** in Loss Rate
 
-* **R$ 4.8 million less** in losses
+* **R$ 9.37 million less** in losses
 
-* **R$ 31.4 million** additional financial value generated
+* **R$ 26.7 million** additional financial value generated
 
-* **~2% increase** in value generated
+* **~3% increase** in value generated
 
 The model selects a portfolio with **lower risk, lower financial loss, and higher generated value**.
 
@@ -142,19 +135,19 @@ The model selects a portfolio with **lower risk, lower financial loss, and highe
 
 ## Key Results
 
-✓ **AUC 0.9738 / KS 0.8497** — Strong discriminative power
+✓ **AUC 0.9764 / KS 0.8497** — Strong discriminative power
 
 ✓ **Score vs. Default:** 0.0–0.1 → 1% | 0.6–1.0 → 79%
 
-✓ **Financial impact:** +R$ 31.4 mi and -49% default
+✓ **Financial impact:** +R$ 26.7 mi and -53% default
 
 ✓ **Good generalization** between validation and test
 
-✓ **Same approval rate:** 90.50% for both proxy and model
+✓ **Same approval rate:** 90.34% for both proxy and model
 
 ---
 
 ## Execution Pipeline
 
-```text
+text
 Exploration → Feature Engineering → Feature Store → Training → Evaluation → MLflow → Prediction
