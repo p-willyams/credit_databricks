@@ -96,7 +96,7 @@ fs_cadastral_state AS (
                     WHEN ZIP2_DIG BETWEEN 73 AND 76 THEN 'GO'
                 END) IN ('DF', 'GO') THEN 'Midwest'
             ELSE NULL
-        END AS REGION
+        END AS REGION_NAME
     FROM base
 )
 
@@ -113,5 +113,5 @@ SELECT
     INDUSTRY_SEGMENT,
     BASE_AGE,
     STATE,
-    REGION
+    REGION_NAME
 FROM fs_cadastral_state;

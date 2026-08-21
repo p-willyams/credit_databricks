@@ -1,67 +1,132 @@
 -- Payment history up to reference date
-WITH tb_history AS (
+WITH payment_history AS (
     SELECT *
     FROM credit_score.data.pagamentos
     WHERE SAFRA_REF < '{dt_ref}'
 ),
 
--- Income information by customer and period
-tb_income AS (
+-- Income information by client and batch
+income_info AS (
     SELECT
         ID_CLIENTE AS CLIENT_ID,
-        SAFRA_REF AS REF_BATCH,
-        RENDA_MES_ANTERIOR AS PREV_MONTH_INCOME
+        SAFRA_REF AS BATCH_REF,
+        RENDA_MES_ANTERIOR AS PREVIOUS_MONTH_INCOME
     FROM credit_score.data.info
 ),
 
--- Total amount to pay by customer and period
-fs_monthly AS (
+-- Total value to pay per client and batch
+monthly_payment AS (
     SELECT
         ID_CLIENTE AS CLIENT_ID,
-        SAFRA_REF AS REF_BATCH,
-        SUM(VALOR_A_PAGAR) AS TOTAL_AMOUNT_TO_PAY_MONTH
-    FROM credit_score.data.pagamentos
+        SAFRA_REF AS BATCH_REF,
+        SUM(VALOR_A_PAGAR) AS TOTAL_PAYMENT_MONTH
+    FROM payment_history
     GROUP BY ID_CLIENTE, SAFRA_REF
 ),
 
--- Monthly combined data
-fs_monthly_combined AS (
+-- Monthly features base: difference and ratio between value to pay and income
+features_base AS (
     SELECT
-        r.CLIENT_ID,
-        r.REF_BATCH,
-        r.PREV_MONTH_INCOME,
-        COALESCE(m.TOTAL_AMOUNT_TO_PAY_MONTH, 0) AS TOTAL_AMOUNT_TO_PAY_MONTH,
-        -- Income to payment ratio
-        r.PREV_MONTH_INCOME / NULLIF(m.TOTAL_AMOUNT_TO_PAY_MONTH, 0) AS INCOME_TO_PAYMENT_RATIO
-    FROM tb_income r
-    LEFT JOIN fs_monthly m ON r.CLIENT_ID = m.CLIENT_ID AND r.REF_BATCH = m.REF_BATCH
-    WHERE r.REF_BATCH < '{dt_ref}'
+        m.CLIENT_ID,
+        m.BATCH_REF,
+        m.TOTAL_PAYMENT_MONTH,
+        i.PREVIOUS_MONTH_INCOME,
+        m.TOTAL_PAYMENT_MONTH - i.PREVIOUS_MONTH_INCOME AS PAYMENT_INCOME_DIFF,
+        m.TOTAL_PAYMENT_MONTH / (CASE WHEN i.PREVIOUS_MONTH_INCOME = 0 THEN 1 ELSE i.PREVIOUS_MONTH_INCOME END) AS PAYMENT_INCOME_RATIO
+    FROM monthly_payment m
+    LEFT JOIN income_info i
+        ON m.CLIENT_ID = i.CLIENT_ID
+        AND m.BATCH_REF = i.BATCH_REF
 ),
 
--- Historical metrics by customer
-fs_financial_history AS (
+-- Ratio between rate and value to pay per document
+document_features AS (
+    SELECT
+        ID_CLIENTE AS CLIENT_ID,
+        ID_DOCUMENTO AS DOCUMENT_ID,
+        TAXA / (CASE WHEN VALOR_A_PAGAR = 0 THEN 1 ELSE VALOR_A_PAGAR END) AS RATE_PAYMENT_RATIO
+    FROM payment_history
+),
+
+-- Historical features aggregated by client
+financial_history_features AS (
     SELECT
         CLIENT_ID,
-        AVG(PREV_MONTH_INCOME) AS AVG_HISTORICAL_INCOME,
-        AVG(TOTAL_AMOUNT_TO_PAY_MONTH) AS AVG_HISTORICAL_PAYMENT,
-        AVG(INCOME_TO_PAYMENT_RATIO) AS AVG_INCOME_PAYMENT_RATIO,
-        MAX(INCOME_TO_PAYMENT_RATIO) AS MAX_INCOME_PAYMENT_RATIO,
-        MIN(INCOME_TO_PAYMENT_RATIO) AS MIN_INCOME_PAYMENT_RATIO,
-        COUNT(*) AS NUM_MONTHS_HISTORY
-    FROM fs_monthly_combined
+
+        -- Payment-income difference: last 3 months
+        AVG(CASE WHEN BATCH_REF >= date_add(MONTH, -3, '{dt_ref}') THEN PAYMENT_INCOME_DIFF END) AS AVG_PAYMENT_INCOME_DIFF_3M,
+        MIN(CASE WHEN BATCH_REF >= date_add(MONTH, -3, '{dt_ref}') THEN PAYMENT_INCOME_DIFF END) AS MIN_PAYMENT_INCOME_DIFF_3M,
+        MAX(CASE WHEN BATCH_REF >= date_add(MONTH, -3, '{dt_ref}') THEN PAYMENT_INCOME_DIFF END) AS MAX_PAYMENT_INCOME_DIFF_3M,
+
+        -- Payment-income difference: last 6 months
+        AVG(CASE WHEN BATCH_REF >= date_add(MONTH, -6, '{dt_ref}') THEN PAYMENT_INCOME_DIFF END) AS AVG_PAYMENT_INCOME_DIFF_6M,
+        MIN(CASE WHEN BATCH_REF >= date_add(MONTH, -6, '{dt_ref}') THEN PAYMENT_INCOME_DIFF END) AS MIN_PAYMENT_INCOME_DIFF_6M,
+        MAX(CASE WHEN BATCH_REF >= date_add(MONTH, -6, '{dt_ref}') THEN PAYMENT_INCOME_DIFF END) AS MAX_PAYMENT_INCOME_DIFF_6M,
+
+        -- Payment-income difference: last year
+        AVG(CASE WHEN BATCH_REF >= date_add(YEAR, -1, '{dt_ref}') THEN PAYMENT_INCOME_DIFF END) AS AVG_PAYMENT_INCOME_DIFF_1Y,
+        MIN(CASE WHEN BATCH_REF >= date_add(YEAR, -1, '{dt_ref}') THEN PAYMENT_INCOME_DIFF END) AS MIN_PAYMENT_INCOME_DIFF_1Y,
+        MAX(CASE WHEN BATCH_REF >= date_add(YEAR, -1, '{dt_ref}') THEN PAYMENT_INCOME_DIFF END) AS MAX_PAYMENT_INCOME_DIFF_1Y,
+
+        -- Payment-income difference: full history
+        AVG(PAYMENT_INCOME_DIFF) AS AVG_PAYMENT_INCOME_DIFF_LIFETIME,
+        MIN(PAYMENT_INCOME_DIFF) AS MIN_PAYMENT_INCOME_DIFF_LIFETIME,
+        MAX(PAYMENT_INCOME_DIFF) AS MAX_PAYMENT_INCOME_DIFF_LIFETIME,
+
+        -- Payment-income ratio: last 3 months
+        AVG(CASE WHEN BATCH_REF >= date_add(MONTH, -3, '{dt_ref}') THEN PAYMENT_INCOME_RATIO END) AS AVG_PAYMENT_INCOME_RATIO_3M,
+        MIN(CASE WHEN BATCH_REF >= date_add(MONTH, -3, '{dt_ref}') THEN PAYMENT_INCOME_RATIO END) AS MIN_PAYMENT_INCOME_RATIO_3M,
+        MAX(CASE WHEN BATCH_REF >= date_add(MONTH, -3, '{dt_ref}') THEN PAYMENT_INCOME_RATIO END) AS MAX_PAYMENT_INCOME_RATIO_3M,
+
+        -- Payment-income ratio: last 6 months
+        AVG(CASE WHEN BATCH_REF >= date_add(MONTH, -6, '{dt_ref}') THEN PAYMENT_INCOME_RATIO END) AS AVG_PAYMENT_INCOME_RATIO_6M,
+        MIN(CASE WHEN BATCH_REF >= date_add(MONTH, -6, '{dt_ref}') THEN PAYMENT_INCOME_RATIO END) AS MIN_PAYMENT_INCOME_RATIO_6M,
+        MAX(CASE WHEN BATCH_REF >= date_add(MONTH, -6, '{dt_ref}') THEN PAYMENT_INCOME_RATIO END) AS MAX_PAYMENT_INCOME_RATIO_6M,
+
+        -- Payment-income ratio: last year
+        AVG(CASE WHEN BATCH_REF >= date_add(YEAR, -1, '{dt_ref}') THEN PAYMENT_INCOME_RATIO END) AS AVG_PAYMENT_INCOME_RATIO_1Y,
+        MIN(CASE WHEN BATCH_REF >= date_add(YEAR, -1, '{dt_ref}') THEN PAYMENT_INCOME_RATIO END) AS MIN_PAYMENT_INCOME_RATIO_1Y,
+        MAX(CASE WHEN BATCH_REF >= date_add(YEAR, -1, '{dt_ref}') THEN PAYMENT_INCOME_RATIO END) AS MAX_PAYMENT_INCOME_RATIO_1Y,
+
+        -- Payment-income ratio: full history
+        AVG(PAYMENT_INCOME_RATIO) AS AVG_PAYMENT_INCOME_RATIO_LIFETIME,
+        MIN(PAYMENT_INCOME_RATIO) AS MIN_PAYMENT_INCOME_RATIO_LIFETIME,
+        MAX(PAYMENT_INCOME_RATIO) AS MAX_PAYMENT_INCOME_RATIO_LIFETIME
+
+    FROM features_base
     GROUP BY CLIENT_ID
 )
 
--- Final result: metrics by document and customer
+-- Final selection: features by document and client
 SELECT
-    h.ID_DOCUMENTO AS DOCUMENT_ID,
-    h.ID_CLIENTE AS CLIENT_ID,
+    d.CLIENT_ID,
+    d.DOCUMENT_ID,
     CAST('{dt_ref}' AS DATE) AS REF_DATE,
-    f.AVG_HISTORICAL_INCOME,
-    f.AVG_HISTORICAL_PAYMENT,
-    f.AVG_INCOME_PAYMENT_RATIO,
-    f.MAX_INCOME_PAYMENT_RATIO,
-    f.MIN_INCOME_PAYMENT_RATIO,
-    f.NUM_MONTHS_HISTORY
-FROM tb_history h
-LEFT JOIN fs_financial_history f ON h.ID_CLIENTE = f.CLIENT_ID;
+    d.RATE_PAYMENT_RATIO,
+    h.AVG_PAYMENT_INCOME_DIFF_3M,
+    h.MIN_PAYMENT_INCOME_DIFF_3M,
+    h.MAX_PAYMENT_INCOME_DIFF_3M,
+    h.AVG_PAYMENT_INCOME_DIFF_6M,
+    h.MIN_PAYMENT_INCOME_DIFF_6M,
+    h.MAX_PAYMENT_INCOME_DIFF_6M,
+    h.AVG_PAYMENT_INCOME_DIFF_1Y,
+    h.MIN_PAYMENT_INCOME_DIFF_1Y,
+    h.MAX_PAYMENT_INCOME_DIFF_1Y,
+    h.AVG_PAYMENT_INCOME_DIFF_LIFETIME,
+    h.MIN_PAYMENT_INCOME_DIFF_LIFETIME,
+    h.MAX_PAYMENT_INCOME_DIFF_LIFETIME,
+    h.AVG_PAYMENT_INCOME_RATIO_3M,
+    h.MIN_PAYMENT_INCOME_RATIO_3M,
+    h.MAX_PAYMENT_INCOME_RATIO_3M,
+    h.AVG_PAYMENT_INCOME_RATIO_6M,
+    h.MIN_PAYMENT_INCOME_RATIO_6M,
+    h.MAX_PAYMENT_INCOME_RATIO_6M,
+    h.AVG_PAYMENT_INCOME_RATIO_1Y,
+    h.MIN_PAYMENT_INCOME_RATIO_1Y,
+    h.MAX_PAYMENT_INCOME_RATIO_1Y,
+    h.AVG_PAYMENT_INCOME_RATIO_LIFETIME,
+    h.MIN_PAYMENT_INCOME_RATIO_LIFETIME,
+    h.MAX_PAYMENT_INCOME_RATIO_LIFETIME
+FROM document_features d
+LEFT JOIN financial_history_features h
+    ON d.CLIENT_ID = h.CLIENT_ID

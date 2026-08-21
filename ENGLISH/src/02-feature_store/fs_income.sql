@@ -6,7 +6,7 @@ WITH payment_history AS (
 ),
 
 -- Selection of unique documents by customer
-fs_documentos_unicos AS (
+unique_documents AS (
     SELECT
         ID_CLIENTE AS CLIENT_ID,
         ID_DOCUMENTO AS DOCUMENT_ID

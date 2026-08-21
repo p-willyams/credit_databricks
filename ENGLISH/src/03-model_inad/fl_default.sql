@@ -8,17 +8,16 @@ WITH datas AS (
         )
     ) AS DATA_REF
 ),
-
--- Mark default (FL_INAD) if payment delayed 5 days or more
-flag_id as (
+flag_id AS (
+    -- Mark default (FL_INAD) if payment delayed 5 days or more
     SELECT
-        p.ID_DOCUMENTO,
-        p.ID_CLIENTE,
-        d.DATA_REF,
+        p.ID_DOCUMENTO AS DOCUMENT_ID,
+        p.ID_CLIENTE AS CLIENT_ID,
+        d.DATA_REF AS REF_DATE,
         CASE
             WHEN DATEDIFF(p.DATA_PAGAMENTO, p.DATA_VENCIMENTO) >= 5 THEN 1
             ELSE 0
-        END AS FL_INAD
+        END AS FL_DEFAULT
     FROM credit_score.data.pagamentos p
     JOIN datas d
         ON p.SAFRA_REF < d.DATA_REF
@@ -28,4 +27,4 @@ flag_id as (
 SELECT *
 FROM flag_id
 QUALIFY ROW_NUMBER() OVER (
-    PARTITION BY ID_DOCUMENTO ORDER BY rand()) <= 2
+    PARTITION BY DOCUMENT_ID ORDER BY rand()) <= 2

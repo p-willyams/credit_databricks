@@ -141,7 +141,7 @@ fs_employees AS (
 SELECT
     h.DOCUMENT_ID,
     h.CLIENT_ID,
-    CAST('{dt_ref}' AS DATE) AS DATA_REF,
+    CAST('{dt_ref}' AS DATE) AS REF_DATE,
     f.CURRENT_NUM_EMPLOYEES,
     f.NUM_EMPLOYEES_3M,
     f.NUM_EMPLOYEES_6M,
