@@ -1,8 +1,10 @@
 <img width="1920" height="1080" alt="Credit risk" src="https://github.com/user-attachments/assets/cb1dd443-d37c-44dc-8e80-94322f8a33b5" />
 
+> :information_source: Para a versão em inglês deste README, veja o arquivo **README.md**.
+
 ## Visão Geral do Projeto
 
-Modelo de **Machine Learning para predição de inadimplência** que reduziu perdas financeiras em **R$ 32,5 milhões** e gerou **R$ 41,7 milhões em resultado adicional** mantendo a mesma taxa de aprovação de crédito.
+Modelo de **Machine Learning para predição de inadimplência** que reduziu perdas financeiras em **R$ 32,5 milhões** e gerou **R$ 41,7 milhões em resultado adicional**, mantendo a mesma taxa de aprovação de crédito.
 
 ### Destaques
 
@@ -48,7 +50,17 @@ Projeto desenvolvido no **Databricks** usando Feature Store, Spark e MLflow.
 * Variáveis temporais (janelas de 3, 6 e 12 meses)
 * Características de cobranças
 
-**Prevenção de Data Leakage:** Apenas informações disponíveis até a data de referência são utilizadas.
+**Prevenção de Data Leakage:** Apenas informações disponíveis até a data de referência são utilizadas, e a base é dividida **cronologicamente** (60% treino / 20% validação / 20% teste) em vez de aleatoriamente, simulando um cenário real de crédito em que o modelo é treinado com o passado e aplicado ao futuro.
+
+### Seleção do modelo
+
+Três algoritmos de classificação foram comparados usando o mesmo pipeline de pré-processamento (tratamento de valores nulos com um `NullImputer` customizado, extração de variáveis de data, One-Hot Encoding e Min-Max Scaling), com cada experimento registrado no **MLflow**:
+
+* **XGBoost** — modelo de boosting baseado em árvores
+* **Regressão Logística** — baseline linear, usada como referência de interpretabilidade
+* **Random Forest** — ensemble de árvores para relações não lineares
+
+O **XGBoost** foi selecionado para o modelo final por apresentar o melhor desempenho de AUC-ROC/KS e boa generalização entre validação e teste.
 
 ---
 
@@ -71,9 +83,10 @@ O modelo final (**XGBoost**) foi avaliado em três conjuntos:
 
 **Matriz de confusão para threshold 0.27 no conjunto de teste:**
 
+```
 [[26682   834]
  [  506  1433]]
-
+```
 
 Resultados de validação e teste são próximos, indicando **boa capacidade de generalização**.
 
@@ -108,9 +121,6 @@ Comparação entre modelo e política de crédito existente (proxy), ambos com *
  Loss Rate                   | 1,91%         | **1,36%**        | **-29%**         |
  Valor aprovado              | 1.344.562.234 | **1.370.059.752**| +R$ 25.497.518   |
  Valor perdido               | 65.628.663    | **33.086.110**   | **-R$ 32.542.553**|
- Percentual de Valor gerado a mais pelo modelo | 3% | | 
- Percentual de Redução de perdas do modelo   | 50% | | 
- Resultado financeiro        | —             | —                | —                |
 
 ### Ganhos Estimados
 
@@ -137,13 +147,108 @@ O modelo seleciona uma carteira com **menor risco e menor perda financeira**.
 
 ---
 
-
-
 ## Pipeline de Execução
 
-text
+```text
 Exploração → Feature Engineering → Feature Store → Treinamento → Avaliação → MLflow → Predição
+```
 
+---
+
+## Estrutura do Projeto
+
+```text
+credit_databricks/
+├── LICENSE
+├── requirements.txt
+├── README.md                          # Versão em inglês
+├── README_PT.md                       # Este arquivo
+├── ENGLISH/
+│   └── src/                           # Mesmo pipeline, documentado em inglês
+│       └── ...
+└── PORTUGUESE/
+    └── src/
+        ├── 01-initial_exploration/
+        │   ├── 01_data_exploration.ipynb   # Exploração dos dados brutos
+        │   └── 02-feature_store.ipynb      # Desenho da Feature Store
+        ├── 02-feature_store/
+        │   ├── fs_cadastral.sql            # Features cadastrais e sociodemográficas
+        │   ├── fs_temporal.sql             # Features temporais
+        │   ├── fs_historico_financeiro.sql # Features de histórico financeiro
+        │   ├── fs_renda.sql                # Features de renda
+        │   ├── fs_funcionarios.sql         # Features de funcionários
+        │   ├── fs_historico_pagamentos.sql # Features de histórico de pagamentos
+        │   └── ingestao.ipynb              # Cria/atualiza as tabelas da Feature Store
+        └── 03-model_inad/
+            ├── fl_inad.sql                 # Query que constrói a amostra rotulada (target)
+            ├── train.ipynb                 # Seleção de modelo, treino, avaliação e MLflow
+            └── predict.ipynb               # Carrega o modelo e escora novas cobranças
+```
+
+---
+
+## Como Executar o Projeto
+
+Este projeto roda no **Databricks**, utilizando **Unity Catalog**, **Feature Engineering (Feature Store)** e **MLflow**. Os passos abaixo assumem que você tem um workspace Databricks com um cluster ativo e acesso às tabelas de origem.
+
+### 1. Importe o repositório para o Databricks
+
+* No seu workspace Databricks, acesse **Workspace → Import** e envie o repositório (ou clone diretamente pelo **Repos**, caso use integração com Git).
+* Associe os notebooks a um cluster com **Databricks Runtime for Machine Learning** (já vem com `pandas`, `numpy`, `scikit-learn`, `mlflow` e `scipy` pré-instalados).
+
+### 2. Instale as dependências adicionais
+
+Apenas duas bibliotecas extras são necessárias — elas são instaladas dentro dos próprios notebooks via `%pip install`, ou podem ser instaladas uma única vez no cluster:
+
+```bash
+pip install databricks-feature-engineering xgboost
+```
+
+### 3. Prepare as tabelas de origem
+
+Certifique-se de que as seguintes tabelas existem no seu Unity Catalog (schema `credit_score.data`):
+
+* `credit_score.data.cadastral`
+* `credit_score.data.info`
+* `credit_score.data.pagamentos`
+
+### 4. Explore os dados (opcional)
+
+Execute os notebooks em `PORTUGUESE/src/01-initial_exploration/` para entender os dados brutos e o desenho da Feature Store:
+
+```text
+01_data_exploration.ipynb
+02-feature_store.ipynb
+```
+
+### 5. Construa a Feature Store
+
+Execute `PORTUGUESE/src/02-feature_store/ingestao.ipynb`. Esse notebook lê cada query `fs_*.sql` e grava os resultados na Feature Store (`feature_store.credit_score.*`), particionada por `REF_DATE`, para a lista de datas de referência definida no notebook (ex.: `'2018-10'` até `'2021-06'` para o treinamento).
+
+> :warning: Ajuste a lista `dates` dentro do notebook para o intervalo de datas de referência que deseja (re)processar. Executar novamente para uma data já processada faz merge/substitui os dados dessa data.
+
+### 6. Treine o modelo
+
+Execute `PORTUGUESE/src/03-model_inad/train.ipynb`. Esse notebook:
+
+1. Constrói a amostra rotulada de treinamento a partir de `fl_inad.sql`, unida às tabelas da Feature Store via `FeatureLookup`;
+2. Divide os dados **cronologicamente** em treino / validação / teste (60% / 20% / 20%);
+3. Compara **XGBoost**, **Regressão Logística** e **Random Forest**, registrando cada execução no **MLflow**;
+4. Retreina o pipeline final de **XGBoost** e o registra no MLflow, exibindo o `run_id` do modelo salvo.
+
+> :information_source: Copie o `run_id` exibido — ele será necessário nas próximas etapas (células de avaliação dentro do `train.ipynb` e no `predict.ipynb`).
+
+### 7. Ingira a data de referência mais recente
+
+Após o treinamento, execute a seção **"Ingestão Final Antes da Predição"** ao final do `ingestao.ipynb`, atualizando a lista `dates` com a data de referência mais recente (ex.: `'2021-07'`), para que a Feature Store tenha as features atualizadas disponíveis para a predição.
+
+### 8. Gere as previsões
+
+Execute `PORTUGUESE/src/03-model_inad/predict.ipynb`, atualizando o `run_id` na célula de carregamento do modelo (`mlflow.sklearn.load_model("runs:/<run_id>/model")`) para o valor salvo no passo 6. O notebook:
+
+1. Constrói o conjunto de predição para o `REF_DATE` mais recente, usando os mesmos `FeatureLookup`s do treinamento;
+2. Escora cada registro com o modelo treinado (colunas `pred` e `proba`);
+3. Cruza as predições com os pagamentos reais e calcula **AUC** e **KS** sobre esse lote mais recente, como verificação final antes de usar os scores em produção.
 
 ---
 
@@ -151,7 +256,7 @@ Exploração → Feature Engineering → Feature Store → Treinamento → Avali
 
 **Core:** Python, SQL, XGBoost, Pandas, Scikit-learn
 
-**Plataforma:** Databricks (Spark, Feature Store, MLflow)
+**Plataforma:** Databricks (Spark, Feature Store, MLflow, Unity Catalog)
 
 ---
 
